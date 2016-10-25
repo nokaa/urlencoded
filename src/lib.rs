@@ -3,7 +3,7 @@ extern crate nom;
 #[macro_use]
 extern crate quick_error;
 
-use nom::{alphanumeric, IResult};
+use nom::{alphanumeric, rest, IResult};
 use std::collections::HashMap;
 use std::str;
 
@@ -22,7 +22,7 @@ named!(key_value <&[u8], (&str, &str)>,
            key: map_res!(alphanumeric, str::from_utf8) >>
                tag!("=") >>
            val: map_res!(alphanumeric, str::from_utf8) >>
-               tag!("&") >>
+               alt_complete!(tag!("&") | rest) >>
            (key, val)
        )
 );
@@ -51,45 +51,51 @@ mod tests {
 
     #[test]
     fn test_one() {
-        let data = b"key=val&";
+        let data = b"key=val";
+        let empty: &[u8] = &[];
 
         let mut map = HashMap::new();
-        let empty: &[u8] = &[];
         map.insert("key", "val");
 
-        let result = keys_and_values(data);
-        println!("{:?}", result);
-        assert_eq!(result, IResult::Done(empty, map));
+        //let result = keys_and_values(data);
+        //println!("{:?}", result);
+        assert_eq!(keys_and_values(data), IResult::Done(empty, map));
     }
 
-    /*#[test]
+    #[test]
     fn test_two() {
         let data = b"key=val&key1=val1";
+        let empty: &[u8] = &[];
 
         let mut map = HashMap::new();
-        map.insert(String::from("key"), String::from("val"));
-        map.insert(String::from("key1"), String::from("val1"));
+        map.insert("key", "val");
+        map.insert("key1", "val1");
 
-        assert_eq!(parse_url_encoded(data), map);
+        assert_eq!(keys_and_values(data), IResult::Done(empty, map));
     }
 
     #[test]
     fn test_three() {
         let data = b"";
+        let empty: &[u8] = &[];
 
         let map = HashMap::new();
 
-        assert_eq!(parse_url_encoded(data), map);
+        assert_eq!(keys_and_values(data), IResult::Done(empty, map));
     }
 
     #[test]
     fn test_four() {
         let data = b"key=&key1=";
+        let empty: &[u8] = &[];
 
         let mut map = HashMap::new();
-        map.insert(String::from("key"), String::from(""));
-        map.insert(String::from("key1"), String::from(""));
+        map.insert("key", "");
+        map.insert("key1", "");
+        let result = keys_and_values(data);
+        println!("{:?}", result);
 
-        assert_eq!(parse_url_encoded(data), map);
-    }*/
+        //assert_eq!(keys_and_values(data), IResult::Done(empty, map));
+        assert_eq!(result, IResult::Done(empty, map));
+    }
 }
