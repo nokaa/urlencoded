@@ -4,4 +4,5 @@ version = "0.1.0"
 authors = ["nokaa <nokaa@cock.li>"]
 
 [dependencies]
-nom = "1.2.4"
+nom = { git = "https://github.com/Geal/nom" }
+quick-error = "1.1.0"

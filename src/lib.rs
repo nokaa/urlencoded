@@ -1,70 +1,68 @@
 #[macro_use]
 extern crate nom;
+#[macro_use]
+extern crate quick_error;
 
-use nom::IResult;
+use nom::{alphanumeric, IResult};
 use std::collections::HashMap;
 use std::str;
 
-pub fn parse_url_encoded(data: &[u8]) -> HashMap<String, String> {
-    let mut form_data = HashMap::new();
-    let mut data = parse_rec(data, &mut form_data).unwrap();
-    while data != [] {
-        data = parse_rec(data, &mut form_data).unwrap();
-    }
-    form_data
-}
-
-fn parse_rec<'a>(data: &'a [u8], map: &mut HashMap<String, String>) -> Result<&'a [u8], u32> {
-    // TODO(nokaa): Actual error handling. Maybe just return the IResult
-    // and let parse_url_encoded handle inserting
-    match get_key(data) {
-        IResult::Done(d, key) => {
-            match get_value(d) {
-                IResult::Done(d, val) => {
-                    let key = str::from_utf8(key).unwrap();
-                    let val = str::from_utf8(val).unwrap();
-                    map.insert(key.to_string(), val.to_string());
-                    return Ok(d);
-                }
-                IResult::Incomplete(_) => return Err(3),
-                IResult::Error(_) => {
-                    let (d, val) = nom::rest(d).unwrap();
-                    let key = str::from_utf8(key).unwrap();
-                    let val = str::from_utf8(val).unwrap();
-                    map.insert(key.to_string(), val.to_string());
-                    return Ok(d);
-                }
-            }
+quick_error! {
+    #[derive(Debug)]
+    pub enum Error {
+        Parse(err: nom::Err) {
+            description("parse error")
+            display("Parse error: {:?}", err)
         }
-        IResult::Incomplete(_) => return Err(1),
-        IResult::Error(_) => return Err(2),
-    };
+    }
 }
 
-/// Parse for the key, consuming all bytes read until the first `=`.
-/// The consumed bytes are returned as the output. The `=` is then consumed
-/// and the remainder of the data is returned as the input.
-///
-/// E.g. `get_key(b"key=value") -> IResult::Done(b"value", b"key")`
-named!(get_key( &[u8] ) -> &[u8], take_until_and_consume!(b"="));
-named!(get_value( &[u8] ) -> &[u8], take_until_and_consume!(b"&"));
+named!(key_value <&[u8], (&str, &str)>,
+       do_parse!(
+           key: map_res!(alphanumeric, str::from_utf8) >>
+               tag!("=") >>
+           val: map_res!(alphanumeric, str::from_utf8) >>
+               tag!("&") >>
+           (key, val)
+       )
+);
+
+named!(keys_and_values_aggregator<&[u8], Vec<(&str, &str)>>, many0!(key_value));
+
+pub fn keys_and_values(input: &[u8]) -> IResult<&[u8], HashMap<&str, &str>> {
+    let mut map = HashMap::new();
+    match keys_and_values_aggregator(input) {
+        IResult::Done(i, tuple_vec) => {
+            for &(k, v) in &tuple_vec {
+                map.insert(k, v);
+            }
+            IResult::Done(i, map)
+        }
+        IResult::Incomplete(a) => IResult::Incomplete(a),
+        IResult::Error(a) => IResult::Error(a),
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::parse_url_encoded;
+    use super::keys_and_values;
+    use nom::IResult;
     use std::collections::HashMap;
 
     #[test]
     fn test_one() {
-        let data = b"key=val";
+        let data = b"key=val&";
 
         let mut map = HashMap::new();
-        map.insert(String::from("key"), String::from("val"));
+        let empty: &[u8] = &[];
+        map.insert("key", "val");
 
-        assert_eq!(parse_url_encoded(data), map);
+        let result = keys_and_values(data);
+        println!("{:?}", result);
+        assert_eq!(result, IResult::Done(empty, map));
     }
 
-    #[test]
+    /*#[test]
     fn test_two() {
         let data = b"key=val&key1=val1";
 
@@ -93,5 +91,5 @@ mod tests {
         map.insert(String::from("key1"), String::from(""));
 
         assert_eq!(parse_url_encoded(data), map);
-    }
+    }*/
 }
