@@ -1,28 +1,22 @@
-#[macro_use]
+#[macro_use(quick_error)]
 extern crate quick_error;
 
 use std::collections::HashMap;
-use std::str;
-use std::string;
-use std::num::ParseIntError;
+use std::{num, str};
 
 quick_error! {
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub enum Error {
-        ParseInt(err: ParseIntError) {
+        ParseInt(err: num::ParseIntError) {
             from()
             description("parse int error")
             display("Parse int error: {}", err)
         }
         StrUtf8(err: str::Utf8Error) {
             from()
+            from(err: std::string::FromUtf8Error) -> (err.utf8_error())
             description("str from utf8 error")
             display("Error converting utf8 to str: {}", err)
-        }
-        StringUtf8(err: string::FromUtf8Error) {
-            from()
-            description("string from utf8 error")
-            display("Error converting utf8 to string: {}", err)
         }
         EOI {
             description("unexpected end of input")
