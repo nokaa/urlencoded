@@ -1,3 +1,19 @@
+//! A byte parser for [urlencoded]() data that takes one pass over the data.
+//!
+//! # Examples
+//!
+//! Example usage:
+//!
+//! ```no_run
+//! extern crate urlencoded;
+//!
+//! fn main() {
+//!     let data = b"key=value";
+//!     let map = urlencoded::parse_urlencoded(data).unwrap();
+//!     let key = map.get("key".to_string()).unwrap();
+//!     println!("{}", key);
+//! }
+//! ```
 #[macro_use(quick_error)]
 extern crate quick_error;
 
@@ -7,29 +23,35 @@ use std::{num, str};
 quick_error! {
     #[derive(Debug, PartialEq)]
     pub enum Error {
+        /// Error parsing int from string
         ParseInt(err: num::ParseIntError) {
             from()
             description("parse int error")
             display("Parse int error: {}", err)
         }
+        /// Error converting Utf8 to string
         StrUtf8(err: str::Utf8Error) {
             from()
             from(err: std::string::FromUtf8Error) -> (err.utf8_error())
             description("str from utf8 error")
             display("Error converting utf8 to str: {}", err)
         }
+        /// Unexpected end of input.
         EOI {
             description("unexpected end of input")
             display("Unexpected end of input")
         }
+        /// Invalid Hexadecimal character
         InvalidHex {
             description("invalid hex char")
             display("Tried to parse invalid hex char")
         }
+        /// Input contained an empty key.
         EmptyKey {
             description("empty key")
             display("Tried to parse an empty key")
         }
+        /// Generic `something went wrong!` error.
         InvalidInput {
             description("Generic `something went wrong!`")
             display("Invalid input")
@@ -47,8 +69,8 @@ pub fn parse_urlencoded(input: &[u8]) -> Result<HashMap<String, String>, Error> 
     let mut key_value = HashMap::new();
     let mut index = 0;
     while index < input.len() {
-        let key = try!(get_key(input, &mut index));
-        let value = try!(get_value(input, &mut index));
+        let key = get_key(input, &mut index)?;
+        let value = get_value(input, &mut index)?;
         key_value.insert(key, value);
     }
     Ok(key_value)
@@ -73,7 +95,7 @@ fn get_key(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
             // Signals hex encoded character
             b'%' => {
                 *index += 1;
-                let c = try!(parse_hex_char(input, &mut index));
+                let c = parse_hex_char(input, &mut index)?;
                 buf.push(c);
             }
             // Signals end of key/beginning of value
@@ -83,7 +105,7 @@ fn get_key(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
                     return Err(Error::EmptyKey);
                 }
 
-                let s = try!(String::from_utf8(buf));
+                let s = String::from_utf8(buf)?;
                 *index += 1;
                 return Ok(s);
             }
@@ -116,7 +138,7 @@ fn get_value(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
             // Signals hex encoded character
             b'%' => {
                 *index += 1;
-                let c = try!(parse_hex_char(input, &mut index));
+                let c = parse_hex_char(input, &mut index)?;
                 buf.push(c);
             }
             // Signals end of key/beginning of value
@@ -125,7 +147,7 @@ fn get_value(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
             }
             // Signals end of key-value pair with another present
             b'&' => {
-                let s = try!(String::from_utf8(buf));
+                let s = String::from_utf8(buf)?;
                 *index += 1;
                 return Ok(s);
             }
@@ -137,7 +159,7 @@ fn get_value(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
     }
 
     // Reached end of input
-    let s = try!(String::from_utf8(buf));
+    let s = String::from_utf8(buf)?;
     *index += 1;
     Ok(s)
 }
@@ -145,7 +167,7 @@ fn get_value(input: &[u8], mut index: &mut usize) -> Result<String, Error> {
 /// Parses a hex encoded character from the input into a byte value. This
 /// function is called when `get_key` or `get_value` read a `%`.
 fn parse_hex_char(input: &[u8], index: &mut usize) -> Result<u8, Error> {
-    // When these functions are called, `index` has already been incremented,
+    // When this function is called, `index` has already been incremented,
     // and is thus pointing at what should be the first of two hex chars.
 
     // We check to make sure that there are at least two bytes to read before
@@ -155,8 +177,8 @@ fn parse_hex_char(input: &[u8], index: &mut usize) -> Result<u8, Error> {
         if valid_hex(input[*index]) && valid_hex(input[*index + 1]) {
             // Convert the two bytes to a string and interpret this as
             // a base-16 byte.
-            let s = try!(str::from_utf8(&input[*index..*index + 2]));
-            let c = try!(u8::from_str_radix(s, 16));
+            let s = str::from_utf8(&input[*index..*index + 2])?;
+            let c = u8::from_str_radix(s, 16)?;
             // We only increment the index by one because it will be
             // incremented again in the calling function
             *index += 1;
