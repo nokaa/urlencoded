@@ -10,10 +10,12 @@
 //! fn main() {
 //!     let data = b"key=value";
 //!     let map = urlencoded::parse_urlencoded(data).unwrap();
-//!     let key = map.get("key".to_string()).unwrap();
+//!     let key = map.get(&"key".to_string()).unwrap();
 //!     println!("{}", key);
 //! }
 //! ```
+#[macro_use]
+extern crate log;
 #[macro_use(quick_error)]
 extern crate quick_error;
 extern crate marksman_escape;
@@ -72,7 +74,9 @@ pub fn parse_urlencoded(input: &[u8]) -> Result<HashMap<String, String>, Error> 
     let mut index = 0;
     while index < input.len() {
         let key = get_key(input, &mut index)?;
+        debug!("key: {}", key);
         let value = get_value(input, &mut index)?;
+        debug!("value: {}", value);
         key_value.insert(key, value);
     }
     Ok(key_value)
@@ -83,10 +87,15 @@ pub fn parse_urlencoded_html_escape(input: &[u8]) -> Result<HashMap<String, Stri
     let mut key_value = HashMap::new();
     let mut index = 0;
     while index < input.len() {
+        // TODO(nokaa): The key can probably be left unescaped.
+        // For 99% of use cases the parsed key will never be inserted
+        // in a webpage.
         let key = get_key(input, &mut index)?;
         let key = escape_html(&key);
+        debug!("escaped key: {}", key);
         let value = get_value(input, &mut index)?;
         let value = escape_html(&value);
+        debug!("escaped value: {}", value);
         key_value.insert(key, value);
     }
     Ok(key_value)
@@ -221,4 +230,17 @@ fn valid_hex(input: u8) -> bool {
 fn escape_html(input: &str) -> String {
     let escaped = Escape::new(input.bytes()).collect();
     String::from_utf8(escaped).unwrap()
+}
+
+#[cfg(test)]
+mod test {
+    use super::parse_hex_char;
+    #[test]
+    fn parse_cr_nl() {
+        let data = b"%0D%0A";
+        let mut i = 1;
+        assert_eq!(Ok(13), parse_hex_char(data, &mut i));
+        i += 2;
+        assert_eq!(Ok(10), parse_hex_char(data, &mut i));
+    }
 }
