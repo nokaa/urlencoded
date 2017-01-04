@@ -5,5 +5,4 @@ authors = ["nokaa <nokaa@cock.li>"]
 
 [dependencies]
 log = "0.3.6"
-marksman_escape = "0.1.2"
 quick-error = "1.1.0"
